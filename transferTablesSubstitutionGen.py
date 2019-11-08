@@ -1,14 +1,32 @@
-#!/bin/env python
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 import pandas as pd
 import openpyxl as xl
+from modules import search_and_sort
+from modules import format_dataframe
+from modules import dfsearch_insert_cols
+from modules import write_file
+from modules import write_sub_file_first
+from modules import write_sub_file_mid
+from modules import write_sub_file_last
+
+
+
+
 
 if hasattr(__builtins__, 'raw_input'):
     input=raw_input
+    
+
+
+
+
 # prompt user for file name of Workbook
 fileName  =   input('Enter file name of XLSX File: ')
 # prompt user for BLEPS beamline name
-beamLine    =   input('Enter beamline name: ')
+beamLine    =   '{' + input('Enter beamline name: ') + ':,'
+substitutionFile = 'test.txt'
 # open workbook
 book = xl.load_workbook( fileName, data_only=True)
 
@@ -20,113 +38,125 @@ sheetDict = {}
 cRo = 1
 # initialize dictionary of DataFrames
 dataframeDict = {}
+indexList  = []
 #
-recordTypes = ['Int','Bool','Iint','Dint','Real']
+recordTypes = ['Int', 'Bool', 'Iint', 'Dint', 'Real']
 # list of new column orders for PV data frames
-newOrder = ['PV Name','EPICS Ethernet Tag', 'Short Description', 'Base Name', 'Type']
+newOrder = ['PV Name', 'EPICS Ethernet Tag', 'Short Description', 'Base Name', 'Type']
 # for binary input: scan, zero name, one name, zero severity, one severity
-biOrder  = ['P','N','TAG','SCAN', 'ZNAM','ONAM', 'ZSV', 'OSV','DESC' ]
+biOrder  = ['{P,', 'N', 'TAG', 'SCAN', 'ZNAM', 'ONAM', 'ZSV', 'OSV', 'DESC}' ]
 # for binary output: high, zero name, one name
-boOrder  = [ 'P' ,'N' ,'TAG','HIGH' , 'ZNAM','ONAM', 'DESC' ]
+boOrder  = ['{P', 'N', 'TAG', 'HIGH', 'ZNAM', 'ONAM', 'DESC}']
 # for analog input: scan, precision, engineering units, hihi, hi, lo, lolo, hihi + hi severity, lolo + lo severity
-aiOrder  = ['P','N','TAG','SCAN', 'PREC','EGU', 'HIHI', 'HIGH', 'LOW', 'LOLO', 'HHSV', 'HSV', 'LSV', 'LLLSV', 'DESC' ]
-columnsList = [ aiOrder, biOrder, aiOrder, aiOrder, aiOrder ]
-
-
+aiOrder  = ['{P', 'N', 'TAG', 'SCAN', 'PREC', 'EGU', 'HIHI', 'HIGH', 'LOW', 'LOLO', 'HHSV', 'HSV', 'LSV', 'LLLSV', 'DESC}']
+columnsList = [aiOrder, biOrder, aiOrder, aiOrder, aiOrder]
+dbFilename = ['bleps_ai.db', 'bleps_bi.db', 'bleps_ai.db', 'bleps_ai.db', 'bleps_ai.db']
     
-# iterate over each sheet of workbook
-for s in range(len(sheetNames)):
-    # initialize/re-initialize list of current sheets used process variables
-    dictList = []    
-    # find the max height of each sheet; i.e. the last row in each sheet
-    maxRow = book[sheetNames[s]].max_row
-    # column index constant (each process variable has 5 attributes listed previously)
-    maxCol = 5
-    # set current row index for each page iteration (start at row 2, as row 1 is column titles/process variable attribute title ; rows are 1-indexed )
-    currRow = 2
-    # iterate over column A for all process variables 
-    for row in book[sheetNames[s]].iter_rows(2,maxRow,1,1,True):
-        # initialize/re-initalize current dictionary containing the current process variable's attributes
-        currDict = {}
-        # set current column index for each row/process variable iteration ( start at column 1, 'Type' attribute ; columns are 0-indexed )
-        currCol = 1
-        # check each process variable's 'Used' field for 'X'
-        for cell in row:
-            # if 'X' character found in 'Used' field, add row to current dictionary
-            if cell == 'X':
-                # iterate over used process variable's attributes/columns
-                for col in book[ sheetNames[s] ].iter_cols(1,maxCol,currRow,currRow,True):
-                    # add current attribute to current dictionary, using attribute name/column title as dictionary key
-                    currDict[ book[ sheetNames[0] ][cRo][currCol].value ] = book[ sheetNames[s] ][currRow][currCol].value
-                    # increment column index to add next attribute
-                    currCol += 1
-                # add process variable's attribute-dictionary to list of all process variables
-                dictList.append( currDict )
-            # increment row index to check if next process variable is used
-            currRow += 1
-    # dictList now contains current sheet's used process variables ; add to dictionary of all used process variables, keyed by sheet name
-    sheetDict[ sheetNames[s] ] = dictList
-
-# remove dictionary keys/pages that have no process variables present
+for s in range(len(sheetNames)): # iterate over each sheet of workbook
+    dictList = [] # initialize/re-initialize list of current sheets used process variables    
+    maxRow = book[sheetNames[s]].max_row # find the max height of each sheet; i.e. the last row in each sheet
+    maxCol = 5     # column index constant (each process variable has 5 attributes listed previously)
+    currRow = 2    # set current row index for each page iteration (start at row 2, as row 1 is column titles/process variable attribute title ; rows are 1-indexed )
+    for row in book[sheetNames[s]].iter_rows(2,maxRow,1,1,True):     # iterate over column A for all process variables 
+        currDict = {} # re/initalize current dictionary containing the current process variable's attributes
+        currCol = 1   # set current column index for each row/process variable iteration ( start at column 1, 'Type' attribute ; columns are 0-indexed )
+        for cell in row: # check each process variable's 'Used' field for 'X'
+            if cell == 'X': # if 'X' character found in 'Used' field, add row to current dictionary
+                for col in book[ sheetNames[s] ].iter_cols(1,maxCol,currRow,currRow,True): # iterate over used process variable's attributes/columns
+                    currDict[book[sheetNames[0]][cRo][currCol].value] = book[sheetNames[s]][currRow][currCol].value # add current attribute to current dictionary, using attribute name/column title as dictionary key
+                    currCol += 1 # increment column index to add next attribute
+                dictList.append(currDict) # add process variable's attribute-dictionary to list of all process variables
+            currRow += 1 # increment row index to check if next process variable is used
+    sheetDict[ sheetNames[s] ] = dictList # dictList now contains current sheet's used process variables ; add to dictionary of all used process variables, keyed by sheet name
 i = 0
-while i < len( sheetNames ):
+while i < len( sheetNames ): # remove dictionary keys/pages that have no process variables present
     if not sheetDict[ sheetNames[i] ]:
         del sheetDict[ sheetNames[i] ]
         del sheetNames[i]
-    i += 1
+    i += 1  
+    
+for i in range(len(sheetNames)): # convert each process variable dictionary/workbook sheet to a DataFrame, store in dictionary keyed by sheet name
+    dataframeDict[sheetNames[i]] = pd.DataFrame(sheetDict[ sheetNames[i]])
+    newColumns = newOrder + (dataframeDict[ sheetNames[i]].columns.drop(newOrder).tolist()) 
+    dataframeDict[sheetNames[i]] = dataframeDict[sheetNames[i]][newColumns] # reorder columns 
+    dataframeDict[sheetNames[i]].insert(0,'{P,', str(beamLine)) # insert column holding beamline identifier
+    dataframeDict[ sheetNames[i] ] = dataframeDict[ sheetNames[i] ].rename(columns={"PV Name":"N", "EPICS Ethernet Tag":"TAG", "Short Description":"DESC}"})# rename existing columns to database pattern identifiers 
+    
+sortReturn = search_and_sort(dataframeDict['Display'],'Type') # Display sheet expected to have non-homogeneous Type field, sort alphabetically by Type
+if sortReturn != 1: # if Type field is non-homogeneous, save sorted dataframe back to dictionary
+    dataframeDict['Display'] = sortReturn[0]
+    changeIndex = sortReturn[1]
+
+for i in range(len(sheetNames)): # for all sheets and all records insert columns required for each   
+    lastFlag = False
+    firstFlag = False # set flags for first/last PV
+    for j in range(len(dataframeDict[sheetNames[i]])): # process variable based on its data type and the corresponding record type used
+        # check if first or last process variable to be written
+        if j == len(dataframeDict[sheetNames[i]])-1:
+            lastFlag = True
+        if j == 0:
+            firstFlag = True
+        currEntry = pd.DataFrame( dataframeDict[sheetNames[i]].loc[j,:] ).transpose() # create a dataframe from dataframe, transpose rows to columns (using 'loc' and pd.Dataframe transposes columns to rows)
         
+        if sheetNames[i] == 'Display' and sortReturn != 1:
+            for l in range(len(changeIndex)):
+                while j != changeIndex[l][0]:
+                    dfsearch_insert_cols(currEntry,j,'Type',changeIndex[l][1],biOrder,insertLocation=3)
+                while j 
+                
 
-j = 0
-eiFlag = 0
-# convert each process variable dictionary to a DataFrame, store in dictionary keyed by sheet name
-for i in range(  len(sheetNames) ):
-    for i2 in range( len(sheetNames-1) ):
-        j = 0
-        eiFlag = False
-        dataframeDict[ sheetNames[i] ] = pd.DataFrame( sheetDict[ sheetNames[i] ] )
-        # reorder columns for writing substitution file
-        newColumns = newOrder + ( dataframeDict[ sheetNames[i] ].columns.drop(newOrder).tolist() )
-        dataframeDict[ sheetNames[i] ] = dataframeDict[ sheetNames[i] ][newColumns]
-        # insert column holding beamline identifier 
-        dataframeDict[ sheetNames[i] ].insert(0,'P,', str(beamLine) )
-        # rename existing columns to database pattern identifiers 
-        dataframeDict[ sheetNames[i] ] = dataframeDict[ sheetNames[i] ].rename(columns={ "PV Name":"N","EPICS Ethernet Tag":"TAG","Short Description":"DESC" } )
-        # insert columns for each record type parameters
-    
-        # -.- # check for special case for 'EPICS_Inputs' sheet, use binary output columns
-        if sheetNames[i] == 'EPICS_Inputs':
-            #insert binary output record column names
-            for jj in range(3,6):
-                dataframeDict[ sheetNames[i] ].insert(jj,boOrder[jj], '"",')
-                eiFlag = True # special case signal      
-        # -.- #                              # -.- #                              # -.- #        
-    
-        # checks if 
-        dataframeDict[ sheetNames[i] ].iloc[:,-1] == 
-        result = dataframeDict[ sheetNames[i] ].ne( dataframeDict[ sheetNames[i2] ], axis='columns' )
-        # check if dataframe is of homogenous 'Type' identifier; if not continue, if yes, sort out types
-        if result.at[i,'Type']: # if another record type is present, raise flag
-            #
-    
-    
-    
-    #  otherwise, use record columns corresponding to record type
-    if not eiFlag:
-        for ii in range( len(dataframeDict[ sheetNames[i] ].get( 'Type' ) ) ):
-            while j < len(recordTypes)-1 and dataframeDict[ sheetNames[i] ].at[ii,'Type'] != recordTypes[j]: # do nothing
-                j += 1
-        for k in range( 3, len( columnsList[j] )-1 ):
-            dataframeDict[ sheetNames[i] ].insert(k, columnsList[j][k], '"",' )
-
-## prob with above is all contents of a dictionary have to have same column headings.
-## 
-    
-    
-# now parse out these data frames into formatted text for substitution file
-# add columns to each data frame for respective data ty
-    
-    
-
-
-    
-                      
+                
+            
+        if sheetNames[i] == 'EPICS_Inputs': # check for special case for 'EPICS_Inputs' sheet, use binary output columns
+            dfsearch_insert_cols(currEntry,j,'Type','Bool',boOrder,insertLocation=3)
+            currEntry = format_dataframe(currEntry)
+            if firstFlag: # if first process variable to be written to substitution file
+                write_sub_file_first(substitutionFile,sheetNames[i],"bleps_bo.db",currEntry)                
+                firstFlag = False
+                continue # go to next
+            elif lastFlag: # if last process variable
+                write_sub_file_last(substitutionFile,currEntry)                                    
+                lastFlag = False
+                continue
+            else:
+                write_sub_file_mid(substitutionFile,currEntry)                
+                continue
+            continue  # move to next sheet     
+# -.- # copy the current PV into intermediary dataframe for PV data type-based formatting # -.- #
+        for ij in range( len(recordTypes) ): # iterate thru all possible record types
+            if dfsearch_insert_cols(currEntry, j, 'Type', recordTypes[ij], columnsList[ij], insertLocation=3):    
+                currEntry = format_dataframe(currEntry)
+                if firstFlag: # if first process variable to be written to substitution file
+                    write_sub_file_first(substitutionFile,sheetNames[i],dbFilename[ij],currEntry)
+                    firstFlag = False
+                    break # go to next
+                elif lastFlag: # if last process variable
+                    write_sub_file_last(substitutionFile,currEntry)                    
+                    lastFlag = False
+                    break
+                else:
+                    write_sub_file_mid(substitutionFile,currEntry)
+                    break
+            elif ij == (len(recordTypes)-1):
+                print "Erroneous data type in workbook\nData type for current process variable:", currEntry.at[j,'Type'] 
+                print "Choose record type from list:\n1.)", recordTypes[0], "\n2.)", recordTypes[1], "\n3.)", recordTypes[2], "\n4.)", recordTypes[3], "\n5.)", recordTypes[4]
+                while True:            
+                    dt = int(input("Enter 1-5: "))
+                    if dt in [1,2,3,4,5]:
+                        dfsearch_insert_cols(currEntry,j,'Type',currEntry.at[j,'Type'],columnsList[dt-1],insertLocation=3)
+                        currEntry = format_dataframe(currEntry)
+                        if firstFlag: # if first process variable to be written to substitution file
+                            write_sub_file_first(substitutionFile,sheetNames[i],dbFilename[ij],currEntry)
+                            firstFlag = False
+                            break # go to next
+                        elif lastFlag: # if last process variable
+                            write_sub_file_last(substitutionFile,currEntry)
+                            lastFlag = False
+                            break
+                        else:
+                            write_sub_file_mid(substitutionFile,currEntry)
+                            break
+                        break
+                    else:
+                        print "Wrong entry."
+                        continue
