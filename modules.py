@@ -15,6 +15,8 @@ def write_file( fn, wl, writeMode = 'a'  ):
     f.close()
     return
 def dfsearch_insert_cols(df, rowNum, colLabl, search, insertColLbl, insertLocation, val=" "):
+    """ arg list: dataframe, row number and column label to search, search value, label of columns to be inserted, insert location
+     and optional value to be inserted into columns """
     if df.at[rowNum,colLabl] ==  search: 
         for k in range( insertLocation, len(insertColLbl)-1 ):
             df.insert(k, insertColLbl[k], val )
@@ -52,15 +54,16 @@ def search_and_sort(df, col):
     for i in range(len(sortedDf)): # for all rows of sorted dataframe
         if i == (len(sortedDf)-1): # if at last row of data frame
             break                  # break loop to avoid out of bound index
-        while sortedDf.at[i, col] == sortedDf.at[i+1, col]: # while current row's value at specified column is equal to next row's value in specified column
-            continue                                        # ...continue through data frame
-        distinctVal += 1 # when new value found, increment 
-        changeIndex.append([i,sortedDf.at[i,col]]) # push location and new value to stack
+        if sortedDf.at[i, col] != sortedDf.at[i+1, col]: # while current row's value at specified column is equal to next row's value in specified column
+            distinctVal += 1 # when new value found, increment 
+            changeIndex.append([i,sortedDf.at[i,col]]) # push location and new Type value to stack
     
     if distinctVal == 1: # if column homogenous
         return distinctVal
     if distinctVal > 1:
         return [sortedDf, changeIndex]
+    
+
 
 #if sheetNames[i] == 'Display': # check for speical case for 'Display' sheet, mixed data types.
 #        sortedDisp = dataframeDict[sheetNames[i]].sort_values(by='Type')

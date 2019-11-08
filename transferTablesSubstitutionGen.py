@@ -11,16 +11,8 @@ from modules import write_sub_file_first
 from modules import write_sub_file_mid
 from modules import write_sub_file_last
 
-
-
-
-
 if hasattr(__builtins__, 'raw_input'):
     input=raw_input
-    
-
-
-
 
 # prompt user for file name of Workbook
 fileName  =   input('Enter file name of XLSX File: ')
@@ -83,31 +75,51 @@ for i in range(len(sheetNames)): # convert each process variable dictionary/work
     dataframeDict[ sheetNames[i] ] = dataframeDict[ sheetNames[i] ].rename(columns={"PV Name":"N", "EPICS Ethernet Tag":"TAG", "Short Description":"DESC}"})# rename existing columns to database pattern identifiers 
     
 sortReturn = search_and_sort(dataframeDict['Display'],'Type') # Display sheet expected to have non-homogeneous Type field, sort alphabetically by Type
-if sortReturn != 1: # if Type field is non-homogeneous, save sorted dataframe back to dictionary
-    dataframeDict['Display'] = sortReturn[0]
-    changeIndex = sortReturn[1]
+if sortReturn != 1: # function returns value '1' if Type field is homogeneous, therefore look for none-1 return value
+    dataframeDict['Display'] = sortReturn[0] # save sorted dataframe back to dictionary
+    changeIndex = sortReturn[1] # save list of tuples that point to last entry of each Type 
 
-for i in range(len(sheetNames)): # for all sheets and all records insert columns required for each   
+for i in range(len(sheetNames)): # for all sheets    
     lastFlag = False
     firstFlag = False # set flags for first/last PV
-    for j in range(len(dataframeDict[sheetNames[i]])): # process variable based on its data type and the corresponding record type used
-        # check if first or last process variable to be written
+    skipFlag = False
+    for j in range(len(dataframeDict[sheetNames[i]])): # for all process variables in each sheet
         if j == len(dataframeDict[sheetNames[i]])-1:
             lastFlag = True
         if j == 0:
-            firstFlag = True
-        currEntry = pd.DataFrame( dataframeDict[sheetNames[i]].loc[j,:] ).transpose() # create a dataframe from dataframe, transpose rows to columns (using 'loc' and pd.Dataframe transposes columns to rows)
+            firstFlag = True  # check if first or last process variable to be written
+        currEntry = pd.DataFrame( dataframeDict[sheetNames[i]].loc[j,:] ).transpose() # create intermediate dataframe from dataframe dictionary, transpose rows to columns (using 'loc' and pd.Dataframe transposes columns to rows)
         
-        if sheetNames[i] == 'Display' and sortReturn != 1:
-            for l in range(len(changeIndex)):
-                while j != changeIndex[l][0]:
-                    dfsearch_insert_cols(currEntry,j,'Type',changeIndex[l][1],biOrder,insertLocation=3)
-                while j 
-                
-
-                
-            
+        if sheetNames[i] == 'Display' and sortReturn != 1: # process Display sheet first if Type field is non-homogeneous (expected case)
+            skipFlag = True
+            jj = 0
+            for l in range(len(changeIndex)): # for all Type changes
+                for j2 in range( jj, changeIndex[l][0] ): # for all rows with current Type 
+                    if changeIndex[l][1] in ['Bool']: # if current Type is associated with analog input records, use ai columns
+                        dfsearch_insert_cols(currEntry,currEntry.index.values[0],'Type',changeIndex[l][1],biOrder,insertLocation=3)
+                        currEntry = format_dataframe(currEntry)
+                    else: # only other expected case is Type associated with binary input records, use bi columns
+                        dfsearch_insert_cols(currEntry,currEntry.index.values[0],'Type',changeIndex[l][1],aiOrder,insertLocation=3)
+                        currEntry = format_dataframe(currEntry)
+                    if firstFlag or (j2 == changeIndex[l][0]+1): # if first process variable to be written to substitution file
+                        if changeIndex[l][1] in ['Int','Iint','Dint','Real']:
+                            write_sub_file_first(substitutionFile,sheetNames[i],'bleps_ai.db',currEntry)
+                        else:
+                            write_sub_file_first(substitutionFile,sheetNames[i],'bleps_bi.db',currEntry)
+                        firstFlag = False
+                        break # go to next
+                    elif lastFlag or (j2 == changeIndex[l][0]): # if last process variable
+                        write_sub_file_last(substitutionFile,currEntry)                    
+                        lastFlag = False
+                        break
+                    else:
+                        write_sub_file_mid(substitutionFile,currEntry)
+                        break
+                    if j2 == changeIndex[l][0]:
+                        jj = j+1
+                              
         if sheetNames[i] == 'EPICS_Inputs': # check for special case for 'EPICS_Inputs' sheet, use binary output columns
+            skipFlag = True
             dfsearch_insert_cols(currEntry,j,'Type','Bool',boOrder,insertLocation=3)
             currEntry = format_dataframe(currEntry)
             if firstFlag: # if first process variable to be written to substitution file
@@ -121,42 +133,43 @@ for i in range(len(sheetNames)): # for all sheets and all records insert columns
             else:
                 write_sub_file_mid(substitutionFile,currEntry)                
                 continue
-            continue  # move to next sheet     
-# -.- # copy the current PV into intermediary dataframe for PV data type-based formatting # -.- #
-        for ij in range( len(recordTypes) ): # iterate thru all possible record types
-            if dfsearch_insert_cols(currEntry, j, 'Type', recordTypes[ij], columnsList[ij], insertLocation=3):    
-                currEntry = format_dataframe(currEntry)
-                if firstFlag: # if first process variable to be written to substitution file
-                    write_sub_file_first(substitutionFile,sheetNames[i],dbFilename[ij],currEntry)
-                    firstFlag = False
-                    break # go to next
-                elif lastFlag: # if last process variable
-                    write_sub_file_last(substitutionFile,currEntry)                    
-                    lastFlag = False
-                    break
-                else:
-                    write_sub_file_mid(substitutionFile,currEntry)
-                    break
-            elif ij == (len(recordTypes)-1):
-                print "Erroneous data type in workbook\nData type for current process variable:", currEntry.at[j,'Type'] 
-                print "Choose record type from list:\n1.)", recordTypes[0], "\n2.)", recordTypes[1], "\n3.)", recordTypes[2], "\n4.)", recordTypes[3], "\n5.)", recordTypes[4]
-                while True:            
-                    dt = int(input("Enter 1-5: "))
-                    if dt in [1,2,3,4,5]:
-                        dfsearch_insert_cols(currEntry,j,'Type',currEntry.at[j,'Type'],columnsList[dt-1],insertLocation=3)
-                        currEntry = format_dataframe(currEntry)
-                        if firstFlag: # if first process variable to be written to substitution file
-                            write_sub_file_first(substitutionFile,sheetNames[i],dbFilename[ij],currEntry)
-                            firstFlag = False
-                            break # go to next
-                        elif lastFlag: # if last process variable
-                            write_sub_file_last(substitutionFile,currEntry)
-                            lastFlag = False
-                            break
-                        else:
-                            write_sub_file_mid(substitutionFile,currEntry)
-                            break
+            continue  # move to next process variable
+        
+        if not skipFlag:    
+            for ij in range( len(recordTypes) ): # iterate thru all possible record types
+                if dfsearch_insert_cols(currEntry, j, 'Type', recordTypes[ij], columnsList[ij], insertLocation=3):    
+                    currEntry = format_dataframe(currEntry)
+                    if firstFlag: # if first process variable to be written to substitution file
+                        write_sub_file_first(substitutionFile,sheetNames[i],dbFilename[ij],currEntry)
+                        firstFlag = False
+                        break # go to next
+                    elif lastFlag: # if last process variable
+                        write_sub_file_last(substitutionFile,currEntry)                    
+                        lastFlag = False
                         break
                     else:
-                        print "Wrong entry."
-                        continue
+                        write_sub_file_mid(substitutionFile,currEntry)
+                        break
+                elif ij == (len(recordTypes)-1):
+                    print "Erroneous data type in workbook\nData type for current process variable:", currEntry.at[j,'Type'] 
+                    print "Choose record type from list:\n1.)", recordTypes[0], "\n2.)", recordTypes[1], "\n3.)", recordTypes[2], "\n4.)", recordTypes[3], "\n5.)", recordTypes[4]
+                    while True:            
+                        dt = int(input("Enter 1-5: "))
+                        if dt in [1,2,3,4,5]:
+                            dfsearch_insert_cols(currEntry,j,'Type',currEntry.at[j,'Type'],columnsList[dt-1],insertLocation=3)
+                            currEntry = format_dataframe(currEntry)
+                            if firstFlag: # if first process variable to be written to substitution file
+                                write_sub_file_first(substitutionFile,sheetNames[i],dbFilename[ij],currEntry)
+                                firstFlag = False
+                                break # go to next
+                            elif lastFlag: # if last process variable
+                                write_sub_file_last(substitutionFile,currEntry)
+                                lastFlag = False
+                                break
+                            else:
+                                write_sub_file_mid(substitutionFile,currEntry)
+                                break
+                            break
+                        else:
+                            print "Wrong entry."
+                            continue
