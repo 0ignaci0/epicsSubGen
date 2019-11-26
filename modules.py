@@ -14,6 +14,7 @@ def write_file( fn, wl, writeMode = 'a'  ):
     f.writelines( wl )
     f.close()
     return
+
 def dfsearch_insert_cols(df, rowNum, colLabl, search, insertColLbl, insertLocation, val=" "):
     """ arg list: dataframe, row number and column label to search, search value, label of columns to be inserted, insert location
      and optional value to be inserted into columns """
@@ -27,26 +28,28 @@ def dfsearch_insert_cols(df, rowNum, colLabl, search, insertColLbl, insertLocati
 def format_dataframe(df):
     df = df.drop(['Base Name','Type'], axis=1) # drop columns not used in substitution file
     for ii in range( 1, len( df.transpose() ) ):    
-        if ii == (len(df.transpose())-1):
+        if ii == (len(df.transpose())-1): # if last field of PV row, add closing bracket to entry
             df.iloc[0,ii] = "\"" + str(df.iloc[0,ii]) + "\"}"
             continue
-        df.iloc[0,ii] = "\"" + str( df.iloc[0,ii] ) + "\"," 
-    return df
+        df.iloc[0,ii] = "\"" + str(df.iloc[0,ii]) + "\"," # otherwise, add a comma after entry
+    return df # returns formatted dataframe
 
 def write_sub_file_first(subF,sheet,dbfn,curr):
     write_file(subF,"# "+sheet+"\n")
     write_file(subF,"file \"$(TOP)/db/" + dbfn +"\"\n{\npattern\n")                               
     write_file(subF,tabulate(curr, headers="keys", tablefmt="plain", showindex=False)+"\n")
     return
+
 def write_sub_file_last(subF,curr):
     write_file(subF,tabulate(curr, tablefmt="plain", showindex=False)+"\n}\n")
     return
+
 def write_sub_file_mid(subF,curr):
     write_file(subF, tabulate(curr, tablefmt="plain", showindex=False)+"\n" )                
     return
 
 def search_and_sort(df, col):
-    distinctVal = 1 # number of distinct values (strings, numbers, et cetera) present in specified column of dataframe ; starts at value '1'
+    distinctVal = 1  # number of distinct values (strings, numbers, et cetera) present in specified column of dataframe ; starts at value '1'
     changeIndex = [] # list of tuples for position of value transition in column ; [[position_index,value]]
     sortedDf = df.sort_values(by=col) # takes passed data frame and sorts by specified column into local df instance
     sortedDf = sortedDf.reset_index(drop=True) # resets this local df instance's index, dropping old index
